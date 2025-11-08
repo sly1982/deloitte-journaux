@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Take care of each other — Matrix Pad</title>
+  <style>
+    :root{
+      --bg:#000;
+      --matrix:#0f0;
+      --accent:#14ff72;
+      --error:#ff3b30;
+      --ok:#11d36e;
+      --glass:rgba(255,255,255,.06);
+      --outline:rgba(255,255,255,.15);
+      --text:#e8ffe8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans";
+      overflow:hidden;
+    }
+
+    #matrix-canvas{
+      position:fixed;
+      inset:0;
+      z-index:0;
+      display:block;
+      background:radial-gradient(ellipse at center, #001100 0%, #000 60%, #000 100%);
+    }
+
+    .overlay{
+      position:relative;
+      z-index:1;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:flex-start;
+      gap:min(3vh,24px);
+      padding:clamp(12px,3vh,24px);
+    }
+
+    h1{
+      margin:clamp(8px,1.8vh,16px) 0 0 0;
+      font-size:clamp(22px,7.5vw,52px);
+      font-weight:900;
+      letter-spacing:.04em;
+      text-transform:uppercase;
+      text-align:center;
+      text-shadow:0 0 14px rgba(20,255,114,.25), 0 0 3px rgba(20,255,114,.8);
+    }
+
+    .panel{
+      width:min(92vw,520px);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:clamp(12px,2.5vh,20px);
+      padding:clamp(12px,3vh,22px);
+      background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55));
+      border:1px solid var(--outline);
+      border-radius:24px;
+      box-shadow:
+        0 8px 40px rgba(0,0,0,.6),
+        inset 0 0 0 1px rgba(20,255,114,.08);
+      backdrop-filter: blur(6px);
+    }
+
+    .display{
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:center;
+    }
+    .slot{
+      width:clamp(54px,18vw,100px);
+      height:clamp(64px,20vw,110px);
+      border-radius:16px;
+      border:2px solid var(--outline);
+      background:var(--glass);
+      display:grid;
+      place-items:center;
+      font-weight:800;
+      font-size:clamp(28px,9vw,46px);
+      color:var(--text);
+      text-shadow:0 0 6px rgba(20,255,114,.35);
+      box-shadow:inset 0 0 18px rgba(0,0,0,.45);
+      user-select:none;
+    }
+    .slot.filled{border-color:rgba(20,255,114,.35);}
+
+    .status{
+      min-height:1.8em;
+      font-size:clamp(18px,5.5vw,28px);
+      font-weight:900;
+      letter-spacing:.04em;
+      text-align:center;
+    }
+    .status.ok{color:var(--ok); text-shadow:0 0 12px rgba(17,211,110,.45)}
+    .status.err{color:var(--error); text-shadow:0 0 10px rgba(255,59,48,.45)}
+
+    .pad{
+      width:100%;
+      aspect-ratio:1/1;
+      max-width:520px;
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      grid-template-rows:repeat(4,1fr);
+      gap:clamp(10px,2.8vw,16px);
+      touch-action:manipulation;
+    }
+    .key{
+      border-radius:18px;
+      border:1px solid var(--outline);
+      background:linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      box-shadow:
+        0 10px 24px rgba(0,0,0,.35),
+        inset 0 0 0 1px rgba(255,255,255,.06);
+      font-size:clamp(22px,7vw,34px);
+      font-weight:800;
+      color:var(--text);
+      display:grid;
+      place-items:center;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+      transition:transform .06s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
+    }
+    .key:active{
+      transform:translateY(1px) scale(.99);
+      box-shadow:
+        0 6px 14px rgba(0,0,0,.35),
+        inset 0 0 0 1px rgba(20,255,114,.12);
+      border-color:rgba(20,255,114,.28);
+      background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
+    }
+    .key.action{
+      font-size:clamp(16px,4.8vw,18px);
+      letter-spacing:.04em;
+      font-weight:700;
+      opacity:.95;
+    }
+
+    .key[data-val="1"]{grid-area:1 / 1}
+    .key[data-val="2"]{grid-area:1 / 2}
+    .key[data-val="3"]{grid-area:1 / 3}
+    .key[data-val="4"]{grid-area:2 / 1}
+    .key[data-val="5"]{grid-area:2 / 2}
+    .key[data-val="6"]{grid-area:2 / 3}
+    .key[data-val="7"]{grid-area:3 / 1}
+    .key[data-val="8"]{grid-area:3 / 2}
+    .key[data-val="9"]{grid-area:3 / 3}
+    .key.clear    {grid-area:4 / 1}
+    .key[data-val="0"]{grid-area:4 / 2}
+    .key.back     {grid-area:4 / 3}
+
+    @keyframes shake{
+      0%,100%{transform:translateX(0)}
+      20%{transform:translateX(-6px)}
+      40%{transform:translateX(6px)}
+      60%{transform:translateX(-4px)}
+      80%{transform:translateX(4px)}
+    }
+    .shake{animation:shake .28s linear}
+  </style>
+</head>
+<body>
+  <canvas id="matrix-canvas"></canvas>
+
+  <main class="overlay">
+    <h1>Take care of each other</h1>
+
+    <section class="panel">
+      <div class="display">
+        <div class="slot" id="s1">•</div>
+        <div class="slot" id="s2">•</div>
+        <div class="slot" id="s3">•</div>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="pad" id="pad">
+        <button class="key" data-val="1">1</button>
+        <button class="key" data-val="2">2</button>
+        <button class="key" data-val="3">3</button>
+        <button class="key" data-val="4">4</button>
+        <button class="key" data-val="5">5</button>
+        <button class="key" data-val="6">6</button>
+        <button class="key" data-val="7">7</button>
+        <button class="key" data-val="8">8</button>
+        <button class="key" data-val="9">9</button>
+        <button class="key action clear">EFFACER</button>
+        <button class="key" data-val="0">0</button>
+        <button class="key action back">←</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function matrixRain(){
+      const c = document.getElementById('matrix-canvas');
+      const ctx = c.getContext('2d');
+      const glyphs = 'アァカサタナハマヤャラワガザダバパイィキシチニヒミリヰギジヂビピウゥクスツヌフムユュルグズヅブプエェケセテネヘメレヱゲゼデベペオォコソトノホモヨョロゴゾドボポ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let drops, fontSize, columns, w, h, frameId;
+
+      const resize = () => {
+        w = c.width  = window.innerWidth;
+        h = c.height = window.innerHeight;
+        fontSize = Math.max(12, Math.floor(Math.min(w, h) / 40));
+        columns = Math.ceil(w / fontSize);
+        drops = Array(columns).fill(1 + Math.floor(Math.random() * h / fontSize));
+      };
+
+      const step = () => {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#0f0';
+        ctx.shadowColor = '#0f0';
+        ctx.shadowBlur = 8;
+        ctx.font = `${fontSize}px monospace`;
+
+        for (let i = 0; i < columns; i++){
+          const char = glyphs.charAt(Math.floor(Math.random() * glyphs.length));
+          const x = i * fontSize;
+          const y = drops[i] * fontSize;
+          ctx.fillText(char, x, y);
+          if (y > h && Math.random() > 0.975) drops[i] = 0;
+          drops[i]++;
+        }
+        frameId = requestAnimationFrame(step);
+      };
+
+      window.addEventListener('resize', () => {
+        cancelAnimationFrame(frameId);
+        resize();
+        step();
+      });
+
+      resize(); step();
+    })();
+
+    (function keypad(){
+      const REQUIRED = '526';
+      const slots = [document.getElementById('s1'), document.getElementById('s2'), document.getElementById('s3')];
+      const status = document.getElementById('status');
+      const pad = document.getElementById('pad');
+
+      let buffer = [];
+      let locked = false;
+
+      function render(){
+        slots.forEach((s, i) => {
+          if (buffer[i] !== undefined){
+            s.textContent = buffer[i];
+            s.classList.add('filled');
+          } else {
+            s.textContent = '•';
+            s.classList.remove('filled');
+          }
+        });
+      }
+
+      function reset(delay=0){
+        if (delay){
+          setTimeout(() => {
+            buffer = [];
+            status.textContent = '';
+            status.className = 'status';
+            render();
+            locked = false;
+          }, delay);
+        } else {
+          buffer = [];
+          status.textContent = '';
+          status.className = 'status';
+          render();
+          locked = false;
+        }
+      }
+
+      function check(){
+        const entered = buffer.join('');
+        if (entered === REQUIRED){
+          status.textContent = 'CORRECT';
+          status.className = 'status ok';
+          locked = true;
+          slots.forEach(s=> s.style.boxShadow = 'inset 0 0 28px rgba(17,211,110,.35)');
+        } else {
+          status.textContent = 'ERREUR';
+          status.className = 'status err';
+          const panel = document.querySelector('.panel');
+          panel.classList.remove('shake');
+          void panel.offsetWidth;
+          panel.classList.add('shake');
+          reset(600);
+        }
+      }
+
+      pad.addEventListener('click', (e) => {
+        const key = e.target.closest('.key');
+        if (!key || locked) return;
+
+        if (key.classList.contains('clear')){
+          reset();
+          return;
+        }
+        if (key.classList.contains('back')){
+          buffer.pop();
+          render();
+          return;
+        }
+        const val = key.getAttribute('data-val');
+        if (!val) return;
+
+        if (buffer.length < 3){
+          buffer.push(val);
+          render();
+          if (buffer.length === 3) check();
+        }
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>
